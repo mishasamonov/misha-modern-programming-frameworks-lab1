@@ -1,0 +1,15 @@
+target/
+data/
+.idea/
+*.iml
+*.log
+report_render/
+evidence/*.html
+evidence/*.txt
+evidence/*full.png
+evidence/guestbook-page.png
+evidence/guestbook-log.png
+*.zip
+build_report.py
+render_report.ps1
+~$*

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Книга відгуків</title>
+    <style>
+        :root { font-family: system-ui, sans-serif; color: #19222d; background: #f4f6f8; }
+        body { margin: 0; }
+        main { max-width: 760px; margin: 48px auto; padding: 0 20px 48px; }
+        h1 { margin: 0 0 8px; font-size: 2rem; }
+        .intro { margin: 0 0 28px; color: #53616f; }
+        form, .comments { background: white; border: 1px solid #dce3e9; border-radius: 12px; padding: 24px; }
+        form { display: grid; gap: 10px; }
+        label { font-weight: 600; }
+        input, textarea { box-sizing: border-box; width: 100%; padding: 11px 12px; border: 1px solid #b9c5cf; border-radius: 7px; font: inherit; }
+        textarea { min-height: 105px; resize: vertical; }
+        button { justify-self: start; margin-top: 6px; padding: 10px 18px; border: 0; border-radius: 7px; background: #245ca6; color: white; font: inherit; font-weight: 600; cursor: pointer; }
+        button:disabled { opacity: .55; cursor: wait; }
+        #status { min-height: 1.4em; margin: 0; color: #a2312c; }
+        h2 { margin: 30px 0 12px; font-size: 1.25rem; }
+        .comments { padding: 0 24px; }
+        #list { list-style: none; padding: 0; margin: 0; }
+        #list li { padding: 18px 0; border-bottom: 1px solid #e8edf1; }
+        #list li:last-child { border-bottom: none; }
+        .comment-author { display: block; margin-bottom: 5px; font-weight: 700; }
+        .comment-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .empty { padding: 20px 0; color: #687683; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Книга відгуків</h1>
+    <p class="intro">Залиште свій відгук і перегляньте повідомлення інших відвідувачів.</p>
+    <form id="comment-form">
+        <label for="author">Ваше ім’я</label>
+        <input id="author" name="author" required maxlength="64" autocomplete="name">
+        <label for="text">Відгук</label>
+        <textarea id="text" name="text" required maxlength="1000"></textarea>
+        <button type="submit">Надіслати відгук</button>
+        <p id="status" role="status" aria-live="polite"></p>
+    </form>
+    <h2>Відгуки</h2>
+    <section class="comments" aria-label="Список відгуків">
+        <ul id="list"><li class="empty">Завантаження…</li></ul>
+    </section>
+</main>
+<script>
+    const form = document.getElementById('comment-form');
+    const list = document.getElementById('list');
+    const status = document.getElementById('status');
+
+    async function loadComments() {
+        try {
+            const response = await fetch('comments');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const comments = await response.json();
+            list.replaceChildren();
+            if (comments.length === 0) {
+                const empty = document.createElement('li');
+                empty.className = 'empty';
+                empty.textContent = 'Поки що немає відгуків.';
+                list.append(empty);
+            }
+            for (const comment of comments) {
+                const item = document.createElement('li');
+                const author = document.createElement('span');
+                author.className = 'comment-author';
+                author.textContent = comment.author;
+                const text = document.createElement('p');
+                text.className = 'comment-text';
+                text.textContent = comment.text;
+                item.append(author, text);
+                list.append(item);
+            }
+        } catch (error) {
+            status.textContent = 'Не вдалося завантажити відгуки.';
+        }
+    }
+
+    form.addEventListener('submit', async event => {
+        event.preventDefault();
+        status.textContent = '';
+        const button = form.querySelector('button');
+        button.disabled = true;
+        try {
+            const body = new URLSearchParams(new FormData(form));
+            const response = await fetch('comments', { method: 'POST', body });
+            if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
+            form.reset();
+            await loadComments();
+        } catch (error) {
+            status.textContent = 'Не вдалося додати відгук. Перевірте поля та спробуйте ще раз.';
+        } finally {
+            button.disabled = false;
+        }
+    });
+
+    loadComments();
+</script>
+</body>
+</html>
