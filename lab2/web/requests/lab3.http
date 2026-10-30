@@ -1,0 +1,111 @@
+@base = http://localhost:8080
+
+### 01 Каталог книг — GET 200
+GET {{base}}/api/books?size=3
+Accept: application/json
+
+> {% client.test("Каталог: 200, три книги", function() {
+  client.assert(response.status === 200);
+  client.assert(response.body.items.length === 3);
+}); %}
+
+### 02 Query-параметри — пошук Java, пагінація і сортування
+GET {{base}}/api/books?q=Java&page=0&size=1&sort=title,asc
+Accept: application/json
+
+> {% client.test("Пошук: одна книга з двох", function() {
+  client.assert(response.status === 200);
+  client.assert(response.body.total === 2);
+  client.assert(response.body.items.length === 1);
+}); %}
+
+### 03 Path-параметр — книга 1
+GET {{base}}/api/books/1
+Accept: application/json
+
+> {% client.test("Книга за ID: 200", function() {
+  client.assert(response.status === 200);
+  client.assert(response.body.id === 1);
+}); %}
+
+### 04 POST JSON — додавання відгуку
+POST {{base}}/api/books/1/comments
+Content-Type: application/json
+
+{
+  "author": "Самонов Михайло",
+  "text": "Маршрути Javalin перевірено через HTTP Client IntelliJ IDEA."
+}
+
+> {% client.test("Відгук створено: 201", function() {
+  client.assert(response.status === 201);
+  client.assert(response.body.bookId === 1);
+  client.global.set("commentId", response.body.id);
+}); %}
+
+### 05 Читання відгуків — GET 200
+GET {{base}}/api/books/1/comments?size=3&sort=createdAt,desc
+Accept: application/json
+
+> {% client.test("Відгуки: 200", function() {
+  client.assert(response.status === 200);
+  client.assert(response.body.items.length > 0);
+}); %}
+
+### 06 DELETE — відповідь без тіла
+DELETE {{base}}/api/books/1/comments/{{commentId}}
+
+> {% client.test("Видалено: 204 і порожнє тіло", function() {
+  client.assert(response.status === 204);
+  client.assert(!response.body);
+}); %}
+
+### 07 Повторне видалення — 404
+DELETE {{base}}/api/books/1/comments/{{commentId}}
+
+> {% client.test("Повторне видалення: 404", function() {
+  client.assert(response.status === 404);
+}); %}
+
+### 08 Валідація query-параметра — 400
+GET {{base}}/api/books?size=0
+
+> {% client.test("Некоректний size: 400", function() {
+  client.assert(response.status === 400);
+  client.assert(response.body.error.code === "BAD_REQUEST");
+}); %}
+
+### 09 Відсутня книга — 404
+GET {{base}}/api/books/999999
+
+> {% client.test("Книгу не знайдено: 404", function() {
+  client.assert(response.status === 404);
+}); %}
+
+### 10 Некоректний JSON — 400
+POST {{base}}/api/books/1/comments
+Content-Type: application/json
+
+{
+
+> {% client.test("JSON відхилено: 400", function() {
+  client.assert(response.status === 400);
+}); %}
+
+### 11 POST з bookId у тілі — приклад методички
+POST {{base}}/api/comments
+Content-Type: application/json
+
+{"bookId": 2, "author": "Student", "text": "Interesting book"}
+
+> {% client.test("Плоский маршрут: 201", function() {
+  client.assert(response.status === 201);
+  client.global.set("flatCommentId", response.body.id);
+}); %}
+
+### 12 Видалення тестового відгуку з другого маршруту
+DELETE {{base}}/api/books/2/comments/{{flatCommentId}}
+
+> {% client.test("Очищення: 204", function() {
+  client.assert(response.status === 204);
+}); %}

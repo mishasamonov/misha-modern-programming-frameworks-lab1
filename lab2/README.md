@@ -1,70 +1,62 @@
-# Лабораторна робота 2 — Трирівнева архітектура
+# Лабораторна робота 3 — Javalin
 
-Виконав: Самонов Михайло. Каталог книг і відгуки на Maven, Servlet API, Jetty 11 та JDBC/H2.
+Самонов Михайло. Каталог книг і відгуків. Гілка `lab3-javalin`.
+Проєкт продовжує лабораторну 2; назву каталогу `lab2` збережено для відкритого проєкту IntelliJ IDEA.
 
-## Збірка і запуск
+## Запуск
 
-Потрібні JDK 17+ і Maven 3.9+. У папці `lab2`:
+Відкрити `pom.xml` в IntelliJ IDEA як Maven-проєкт. Потрібні JDK 17+ і Maven 3.9+.
 
 ```shell
 mvn clean install
-mvn -f web/pom.xml jetty:run
+mvn -f web/pom.xml exec:java
 ```
 
-У Windows можна запустити `./run.ps1`. Скрипт також знаходить Maven та JDK установленої IntelliJ IDEA 2026.2.2, якщо Maven відсутній у PATH.
-Відкрити http://localhost:8081/books. Зупинка: Ctrl+C у консолі сервера.
-У IntelliJ IDEA відкрити `lab2/pom.xml` як Maven-проєкт. Maven goal `clean install` виконати для parent, а `jetty:run` — для web.
+У Windows `./run.ps1` знаходить Maven/JDK із PATH або встановленої IntelliJ IDEA.
+Можна запустити `sumdu.edu.ua.web.JavalinBookApp.main()` кнопкою біля main в IDEA.
+Адреса: http://localhost:8080/api/books. Зупинка: Stop в IDEA або Ctrl+C.
+Версії з методички: Javalin 6.2.0, Jackson 2.17.2, exec-maven-plugin 3.5.0; release 17.
 
-Код компілюється з `release 17`. Перевірено на JetBrains Runtime 25.0.4, Maven 3.9.16, Jetty 11.0.25.
-Тільки перевірка: `mvn clean verify`. У кожному модулі є ArchUnit-тести; HTTP-тести запускають справжній embedded Jetty на випадковому вільному порту.
+## Структура
 
-## Межі модулів
+`core` і `persistence` повністю збережені з лабораторної 2. У `web` пакування змінено з WAR на JAR.
+Web викликає сервіси та порти core; JDBC-адаптер підключено через ServiceLoader та runtime-залежність.
+`web/reference/servlet-api` містить вихідну реалізацію для порівняння; вона не компілюється й не запускається.
 
-* `core` — Book, Comment, Page, PageRequest, порти та сервіси. Немає production-залежностей.
-* `persistence` → `core` — JDBC-репозиторії, H2 та схема.
-* `web` → `core` — HTTP, HTML, JSON, журнал. `persistence` підключено зі scope `runtime` лише для пакування і завантаження адаптера.
+## REST API
 
-`AppInit` знаходить `RepositoryProvider` через стандартний `ServiceLoader`. Файл `META-INF/services/ua.edu.sumdu.core.port.RepositoryProvider` міститься у persistence. Жоден production-клас web не імпортує persistence/JDBC/H2; ArchUnit перевіряє це без винятків для конфігурації.
-
-## HTTP
-
-| Метод | Шлях | Призначення |
+| Метод | Шлях | Результат |
 |---|---|---|
-| GET | `/books?q=&page=0&size=10&sort=id,asc` | Каталог HTML; з `Accept: application/json` — JSON Page |
-| GET | `/books/{id}` | Сторінка книги; з JSON Accept — Book |
-| POST | `/books` | Додати книгу: title, author, pubYear |
-| GET | `/books/{id}/comments` | Сторінка відгуків JSON: page, size, sort, author, since |
-| POST | `/books/{id}/comments` | Додати відгук: author, text; 201, Location, JSON |
-| DELETE | `/books/{id}/comments/{commentId}` | Видалити свіжий відгук; 204 |
+| GET | `/` | Book catalogue — Javalin 6.2.0 |
+| GET | `/api/books?q=Java&page=0&size=1&sort=title,asc` | 200, JSON Page |
+| GET | `/api/books/{id}` | 200, JSON Book |
+| POST | `/api/books` | 201, JSON Book, Location |
+| GET | `/api/books/{id}/comments` | 200, JSON Page; author, since, page, size, sort |
+| POST | `/api/books/{id}/comments` | 201, JSON Comment, Location |
+| POST | `/api/comments` | 201; варіант методички з bookId у JSON |
+| DELETE | `/api/books/{id}/comments/{commentId}` | 204, порожнє тіло |
 
-Для кожного `/books...` є JSON-варіант `/api/books...`, незалежний від Accept. POST приймає JSON або application/x-www-form-urlencoded. HTML і JSON мають UTF-8.
+POST приймає application/json. Книга: title, author, pubYear. Відгук: author, text; для /api/comments також bookId.
+page — від 0, size — 1–100. Збережено пошук, пагінацію, сортування, фільтри та правило видалення протягом 24 годин.
 
-`page` нумерується з 0, `size`: 1–100. Для книг дозволено `id`, `title`, `author`, `pubYear` з напрямком `asc`/`desc`, наприклад `sort=title,asc`. Для відгуків — `id`, `author`, `createdAt`. Друге сортування за id забезпечує стабільні сторінки. Пошук назви/автора не враховує регістр. `%` та `_` у пошуковому рядку трактуються буквально, а параметри передаються в PreparedStatement. `total` враховує ті самі фільтри, що й items. Порожній результат — 200 і порожній items.
+app.before() записує метод і шлях, призначає X-Request-Id. app.after() фіксує статус.
+app.exception() формує JSON-помилки: 400 — параметри/JSON, 404 — ресурс, 409 — строк видалення, 415 — Content-Type, 500 — збій.
+Непідтримуваний метод: 405 і Allow. Журнал: logs/catalog.log відносно робочої папки Java-процесу.
 
-Приклад фільтра відгуків: `/api/books/1/comments?author=Михайло&since=2026-10-01T00:00:00Z&page=0&size=10&sort=createdAt,desc`.
+## Перевірка
 
-## Бізнес-правила та помилки
+40 тестів: core — 15, persistence — 8, web — 17 (12 HTTP + 5 ArchUnit).
+HTTP-тести запускають справжній Javalin/Jetty на випадковому порту й окремій H2 in-memory.
+Перевірено UTF-8, пагінацію, створення книги, обидва POST-маршрути відгуків, DELETE, 24 години, коди 400/404/405/409/415/500.
 
-`CatalogService`: назва й автор книги обов'язкові, до 255 символів; рік 1–9999.
-`CommentService`: автор 1–64, текст 1–1000 символів після trim. Книга має існувати. Дата створення призначається серверним Clock.
-Видалення дозволене, коли `createdAt <= now < createdAt + 24 години`. Рівно через 24 години повертається 409. Час береться зі збереженого відгуку за парою bookId/commentId. Передавати власний createdAt для видалення неможливо. Clock інжектується для точних граничних тестів.
+Відкрити web/requests/lab3.http у HTTP Client IntelliJ IDEA та натиснути Run All Requests.
+12 запитів передають створені ID у DELETE та прибирають свої тестові відгуки.
+Навмисно неповний JSON у запиті 10 потрібен для перевірки 400; підсвітка цього фрагмента очікувана.
 
-400 — невалідні поля/параметри/JSON; 404 — відсутня книга/відгук/маршрут; 409 — минув строк видалення; 405 — метод не підтримується; 500 — неочікувана помилка сховища/сервера.
-
-```json
-{"error":{"status":400,"code":"BAD_REQUEST","message":"size має бути від 1 до 100","path":"/books","timestamp":"2026-10-29T20:00:00Z","requestId":"..."}}
-```
-
-`X-Request-Id` пов'язує відповідь із журналом. Внутрішні винятки та SQL не потрапляють у 500-відповідь. INFO — створення/видалення відгуку з ключовими полями, WARN — 4xx, ERROR зі стеком — 5xx. Повний текст відгуку не записується в лог. Журнал: `logs/catalog.log` відносно робочої папки Maven.
-
-## Дані
-
-Типово використовується `jdbc:h2:file:./data/catalog;AUTO_SERVER=TRUE` (користувач sa, порожній пароль для локальної навчальної БД). Відносні data/logs визначаються робочою папкою процесу. Ініціалізація не видаляє таблиці: CREATE IF NOT EXISTS і початкові шість книг додаються без дублікатів. FK зв'язує коментарі з книгами, час зберігається як TIMESTAMP(9) WITH TIME ZONE.
-URL можна змінити JVM-властивістю `-Dcatalog.db.url=...`.
-
-Тести працюють з окремими in-memory/тимчасовими файловими БД; дані запущеного каталогу вони не змінюють. Штучна відмова сховища для 500 реалізована тільки у HTTP-тесті, у застосунку немає спеціального маршруту для помилок.
+Файлова H2: jdbc:h2:file:./data/catalog;AUTO_SERVER=TRUE. Робоча папка визначає data/logs.
+JVM-властивості: catalog.db.url — URL бази; catalog.port — порт (типово 8080).
 
 ## Джерела
 
-Методичні вказівки до лабораторної роботи 2, СумДУ, 2026–2027; вихідний звіт лабораторної роботи 1.
-[Jetty Maven Plugin 11](https://jetty.org/docs/jetty/11/programming-guide/maven-jetty/jetty-maven-plugin.html), [ArchUnit User Guide](https://www.archunit.org/userguide/html/000_Index.html).
+Методичка СумДУ до лабораторної 3 (надана PDF), звіт і проєкт лабораторної 2.
+[Javalin 6.2.0](https://github.com/javalin/javalin/tree/javalin-parent-6.2.0).

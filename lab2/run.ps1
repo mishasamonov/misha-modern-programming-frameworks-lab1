@@ -10,4 +10,4 @@ else {
 }
 & $mavenPath -B -ntp clean install
 if ($LASTEXITCODE -ne 0) { throw 'Збірка або тести завершилися помилкою.' }
-& $mavenPath -B -ntp -f web/pom.xml jetty:run
+& $mavenPath -B -ntp -f web/pom.xml exec:java
